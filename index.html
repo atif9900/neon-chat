@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Chat | Ultimate P2P</title>
+    <link rel="stylesheet" href="style.css?v=2.0">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="glass-container">
+        <div class="brand-section">
+            <h1 class="neon-text">Neon Chat</h1>
+            <p class="typing-container">⚡ <span class="typing-text">Decentralized Next-Gen Calling...</span></p>
+        </div>
+        
+        <div class="controls-section">
+            <input type="text" id="roomInput" placeholder="Enter or Generate Code" class="glass-input">
+            <button id="connectBtn" class="neon-btn">Connect</button>
+            <button id="permGroupBtn" class="neon-btn premium-btn">👑 Permanent Group</button>
+        </div>
+
+        <div class="media-controls">
+            <button id="micBtn" class="glass-btn">🎙️ Mic</button>
+            <button id="camBtn" class="glass-btn">📷 Cam</button>
+            <button id="shareBtn" class="glass-btn">🖥️ Share Screen</button>
+            <select id="qualitySelect" class="glass-input">
+                <option value="auto">Auto (Smart)</option>
+                <option value="1080">HD (1080p)</option>
+                <option value="720">High (720p)</option>
+                <option value="480">Data Saver (480p)</option>
+            </select>
+        </div>
+        
+        <div class="whiteboard-tools">
+            <button id="drawBtn" class="glass-btn active">✏️ Draw</button>
+            <button id="eraserBtn" class="glass-btn">🧽 Eraser</button>
+            <button id="clearBtn" class="glass-btn danger">🗑️ Clear</button>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <canvas id="whiteboard"></canvas>
+        <div id="videoGrid" class="video-grid"></div>
+    </div>
+
+    <script type="module" src="app.js?v=2.0"></script>
+</body>
+</html>

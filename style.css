@@ -1,0 +1,71 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+body { background: #0f0f13; color: white; overflow-x: hidden; }
+
+.glass-container {
+    background: rgba(25, 25, 30, 0.6);
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid rgba(0, 255, 204, 0.2);
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+    position: relative;
+}
+
+.brand-section { display: flex; flex-direction: column; gap: 5px; }
+.neon-text { color: #fff; text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc; font-size: 28px; }
+
+/* Typing Effect CSS */
+.typing-container { color: #888; font-size: 13px; display: flex; align-items: center; }
+.typing-text {
+    border-right: 2px solid #00ffcc;
+    white-space: nowrap;
+    overflow: hidden;
+    width: 0;
+    animation: typing 4s steps(30, end) infinite, blink 0.75s step-end infinite;
+}
+@keyframes typing { from { width: 0 } to { width: 100% } 80% { width: 100% } }
+@keyframes blink { from, to { border-color: transparent } 50% { border-color: #00ffcc } }
+
+.controls-section, .media-controls, .whiteboard-tools { display: flex; gap: 10px; align-items: center; }
+
+.glass-input {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #00ffcc;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    outline: none;
+}
+
+.neon-btn, .glass-btn {
+    background: transparent;
+    color: #00ffcc;
+    border: 1px solid #00ffcc;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+.neon-btn:hover, .glass-btn.active { background: #00ffcc; color: #000; box-shadow: 0 0 15px #00ffcc; }
+.premium-btn { border-color: #ffd700; color: #ffd700; }
+.premium-btn:hover { background: #ffd700; color: #000; box-shadow: 0 0 15px #ffd700; }
+.danger { border-color: #ff4a4a; color: #ff4a4a; }
+.danger:hover { background: #ff4a4a; color: white; }
+
+.workspace { position: relative; height: 85vh; width: 100vw; display: flex; }
+#whiteboard { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; background: transparent; }
+
+.video-grid {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px; padding: 20px; z-index: 1; pointer-events: none;
+}
+video {
+    width: 100%; height: 220px; border-radius: 12px; background: #050508;
+    border: 2px solid rgba(0, 255, 204, 0.2); object-fit: cover; pointer-events: auto;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
