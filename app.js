@@ -566,3 +566,69 @@ if(savePermanentBtn) {
     });
 }
 renderPremiumGroups();
+
+// ... (Upar ka tumhara purana code) ...
+
+if(savePermanentBtn) {
+    savePermanentBtn.addEventListener('click', () => {
+        if(!currentRoomDisplayCode) return alert("Koi connection join karo bhai, fir save karna!");
+        let pGroups = JSON.parse(localStorage.getItem('CryptChat_VIP_Groups') || '[]');
+        if(!pGroups.includes(currentRoomDisplayCode)) { pGroups.push(currentRoomDisplayCode); localStorage.setItem('CryptChat_VIP_Groups', JSON.stringify(pGroups)); renderPremiumGroups(); alert(`👑 Room "${currentRoomDisplayCode}" VIP saved!`); } else { alert("Pehle se hi VIP list mein hai."); }
+    });
+}
+renderPremiumGroups(); // <--- YEH TUMHARI FILE KI LAST LINE HAI
+
+
+// 👇 YAHAN SE NAYA PiP WALA CODE PASTE KARNA HAI 👇
+
+// --- PICTURE-IN-PICTURE (FLOATING POPUP) LOGIC ---
+const vPipBtn = document.getElementById('v-pip-btn');
+
+// Show PiP button only when a video is active
+function updatePipButtonVisibility() {
+    let remoteVideo = document.querySelector('.dynamic-remote-frame video');
+    if (vPipBtn) {
+        vPipBtn.style.display = remoteVideo ? 'flex' : 'none';
+    }
+}
+
+// Check every time video grid updates
+const observer = new MutationObserver(updatePipButtonVisibility);
+if (dynamicVideoGrid) {
+    observer.observe(dynamicVideoGrid, { childList: true, subtree: true });
+}
+
+// 1. Manual PiP Button Click
+if (vPipBtn) {
+    vPipBtn.addEventListener('click', async () => {
+        let remoteVideo = document.querySelector('.dynamic-remote-frame video');
+        if (!remoteVideo) return alert("Koi video chal nahi rahi hai PiP ke liye.");
+        
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else {
+                await remoteVideo.requestPictureInPicture();
+            }
+        } catch (err) {
+            console.error("PiP error:", err);
+            alert("Tumhara browser PiP mode support nahi karta.");
+        }
+    });
+}
+
+// 2. Auto-PiP on Tab Switch (Smart Feature)
+document.addEventListener('visibilitychange', async () => {
+    let remoteVideo = document.querySelector('.dynamic-remote-frame video');
+    
+    // Agar user doosre tab me gaya (hidden)
+    if (document.hidden && remoteVideo && !document.pictureInPictureElement) {
+        try {
+            // Background me aate hi video ko popup me fenk do
+            await remoteVideo.requestPictureInPicture();
+        } catch (err) {
+            console.log("Auto-PiP blocked by browser permissions.");
+        }
+    }
+});
+
