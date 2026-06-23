@@ -71,7 +71,7 @@ const ctx = blackboardCanvas ? blackboardCanvas.getContext('2d') : null;
 let isDrawing = false, currentTool = 'pencil', currentColor = '#00ff41';
 let localStartX = 0, localStartY = 0, lastX = 0, lastY = 0;
 let remotePointers = {}; 
-let canvasSnapshot = null; // Box/Line rendering ke liye
+let canvasSnapshot = null;
 
 const videoWorkspaceOverlay = document.getElementById('video-workspace-overlay');
 const localVideoStreamNode = document.getElementById('local-video-stream');
@@ -131,7 +131,32 @@ const closeMenuBtn = document.getElementById('close-menu-btn');
 if(menuBtn) menuBtn.addEventListener('click', () => { document.getElementById('sidebar').classList.add('active'); });
 if(closeMenuBtn) closeMenuBtn.addEventListener('click', () => { document.getElementById('sidebar').classList.remove('active'); });
 
-// --- CONNECTION FIX: 100% Isolated Stringified Signaling ---
+// --- LIVE EFFECTS ENGINE (FIXED & RESTORED) ---
+const mCanvas = document.getElementById('matrix-canvas'); const mCtx = mCanvas ? mCanvas.getContext('2d') : null; let columns = [];
+if (mCanvas && mCtx) {
+    mCanvas.width = window.innerWidth; mCanvas.height = window.innerHeight; const font_size = 14; const cols = mCanvas.width / font_size;
+    for (let x = 0; x < cols; x++) columns[x] = 1;
+    function renderCanvasMatrix() {
+        const theme = document.documentElement.getAttribute('data-theme');
+        if (theme === 'hacker') {
+            mCtx.fillStyle = 'rgba(0, 0, 0, 0.05)'; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height); mCtx.fillStyle = '#00ff41'; mCtx.font = "bold " + font_size + "px monospace"; 
+            for (let i = 0; i < columns.length; i++) { const text = String.fromCharCode(33 + Math.floor(Math.random() * 93)); mCtx.fillText(text, i * font_size, columns[i] * font_size); if (columns[i] * font_size > mCanvas.height && Math.random() > 0.975) columns[i] = 0; columns[i]++; }
+        } else if (theme === 'romance') {
+            mCtx.fillStyle = 'rgba(20, 3, 9, 0.06)'; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height); mCtx.fillStyle = '#ff2a6d'; mCtx.font = (12 + Math.floor(Math.random() * 6)) + "px Arial";
+            for (let i = 0; i < columns.length; i++) { const hearts = ['❤', '♥', '💕', '💖']; const text = hearts[Math.floor(Math.random() * hearts.length)]; if(Math.random() > 0.4) mCtx.fillText(text, i * font_size, columns[i] * font_size); if (columns[i] * font_size > mCanvas.height && Math.random() > 0.96) columns[i] = 0; columns[i] += 0.5; }
+        } else if (theme === 'neon-cinematic') {
+            mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height);
+            if(Math.random() > 0.99) {
+                let th = document.getElementById('thunder-overlay');
+                if(th) { th.classList.remove('thunder-hidden'); th.classList.add('thunder-flash'); setTimeout(()=>{ th.classList.remove('thunder-flash'); th.classList.add('thunder-hidden'); }, 1000); }
+            }
+        } else { mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height); } 
+        window.requestAnimationFrame(renderCanvasMatrix);
+    }
+    window.requestAnimationFrame(renderCanvasMatrix);
+}
+
+// --- SIGNALING CORE ---
 function initializeSecureChatMatrix(code) {
     let bannedUsers = JSON.parse(localStorage.getItem('P2P_Banned_' + code) || '[]');
     if(bannedUsers.includes(localPeerId)) return alert("❌ You are banned from this Node.");
@@ -169,7 +194,7 @@ function initializeSecureChatMatrix(code) {
 
     onChildAdded(ref(db, `rooms/${roomId}/signals/${localPeerId}`), (snapshot) => {
         let val = snapshot.val();
-        let sig = JSON.parse(val.payload); // FIX: Stringified parsing
+        let sig = JSON.parse(val.payload);
         sig.from = val.from;
         handleIncomingSignal(sig);
         remove(snapshot.ref);
@@ -193,7 +218,7 @@ if(connectEngineBtn) {
 
 async function sendGatewaySignal(action, data = {}, targetPeer = '') {
     if (action === 'send_signal') {
-        push(ref(db, `rooms/${roomId}/signals/${targetPeer}`), { from: localPeerId, payload: JSON.stringify(data) }); // FIX: Stringified delivery
+        push(ref(db, `rooms/${roomId}/signals/${targetPeer}`), { from: localPeerId, payload: JSON.stringify(data) });
     }
 }
 
@@ -219,7 +244,7 @@ async function handleIncomingSignal(sig) {
             if (pc.remoteDescription && pc.remoteDescription.type) { try { await pc.addIceCandidate(new RTCIceCandidate(sig.candidate)); } catch(e){} 
             } else { if (!pc.iceQueue) pc.iceQueue = []; pc.iceQueue.push(sig.candidate); }
         }
-    } catch(error) { console.error("Signal Handling Error:", error); }
+    } catch(error) {}
 }
 
 function updateVideoGrid() {
@@ -261,7 +286,7 @@ function buildWebRTCLink(remoteId, isOffer) {
         try { 
             pc.makingOffer = true; let offer = await pc.createOffer(); if (pc.signalingState !== "stable") return; await pc.setLocalDescription(offer); 
             sendGatewaySignal('send_signal', { type: 'offer', sdp: {type: offer.type, sdp: offer.sdp} }, remoteId); 
-        } catch(err) { console.error("Negotiation error:", err); } finally { pc.makingOffer = false; }
+        } catch(err) {} finally { pc.makingOffer = false; }
     };
 
     pc.oniceconnectionstatechange = () => { if(['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)) { removeRemoteVideoNode(remoteId); delete peers[remoteId]; delete dataChannels[remoteId]; delete remotePointers[remoteId]; } };
@@ -371,7 +396,9 @@ function bindChannel(id, dc) {
                 }
             }
         }
-        else if(data.type === 'typing') { if(typingIndicator) typingIndicator.classList[data.isTyping ? 'remove' : 'add']('hidden'); }
+        else if(data.type === 'typing') { 
+            if(typingIndicator) typingIndicator.classList[data.isTyping ? 'remove' : 'add']('hidden'); 
+        }
         else if(data.type === 'draw') renderDraw(data.payload, id);
         else if(data.type === 'clear') { if(ctx) ctx.clearRect(0, 0, blackboardCanvas.width, blackboardCanvas.height); }
         else if(data.type === 'name_sync') { dc.remoteName = data.name; let lbl = document.getElementById(`label_${id}`); if(lbl) lbl.innerText = data.name; }
@@ -450,6 +477,22 @@ if(vToggleCamBtn) {
     });
 }
 
+// --- FIX: Camera Flip Logic Add kiya ---
+if(vFlipCamBtn) {
+    vFlipCamBtn.addEventListener('click', async () => {
+        if(!localAVStream) return;
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        let oldT = localAVStream.getVideoTracks()[0]; if(oldT) oldT.stop();
+        try { 
+            let newS = await navigator.mediaDevices.getUserMedia(getVideoConstraints()); 
+            let newT = newS.getVideoTracks()[0]; 
+            localAVStream.removeTrack(oldT); localAVStream.addTrack(newT); 
+            if(localVideoStreamNode) localVideoStreamNode.srcObject = localAVStream; 
+            Object.values(peers).forEach(pc => { let sender = pc.getSenders().find(s => s.track && s.track.kind === 'video'); if(sender) sender.replaceTrack(newT); }); 
+        } catch(err) { alert("Camera flip failed or not supported."); }
+    });
+}
+
 if(vQualityBtn) {
     vQualityBtn.addEventListener('click', async function() {
         if(!localAVStream) return;
@@ -469,8 +512,22 @@ if(vQualityBtn) {
     });
 }
 
-// --- MESSAGING ---
-if(messageInput) messageInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') sendMsg(messageInput.value, null); });
+// --- MESSAGING & TYPING (RESTORED TYPING FIX) ---
+let typingTimer;
+if(messageInput) {
+    messageInput.addEventListener('keydown', (e) => { 
+        if(e.key === 'Enter') sendMsg(messageInput.value, null); 
+    });
+    // Typing Broadcasting Start
+    messageInput.addEventListener('input', () => {
+        Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") dc.send(JSON.stringify({ type: 'typing', isTyping: true })); });
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => {
+            Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") dc.send(JSON.stringify({ type: 'typing', isTyping: false })); });
+        }, 1500);
+    });
+}
+
 if(sendBtn) sendBtn.addEventListener('click', () => sendMsg(messageInput ? messageInput.value : '', null));
 
 function sendMsg(text, mediaObj) {
@@ -478,6 +535,9 @@ function sendMsg(text, mediaObj) {
     let msgId = 'm_' + Date.now(); 
     if(messageInput) messageInput.value = '';
     
+    // Clear typing indicator immediately on send
+    Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") dc.send(JSON.stringify({ type: 'typing', isTyping: false })); });
+
     let encryptedText = text ? btoa(unescape(encodeURIComponent(rc4Cipher(cryptoKey, text)))) : '';
     let msgObj = { msgId, cipher: encryptedText, mediaObj, senderName: localDisplayName, senderId: localPeerId, timestamp: Date.now() };
     saveDecentralizedMsg(msgObj);
@@ -491,7 +551,7 @@ function pushBubble(text, sender, id, mediaObj, nameLabel, isHistoryLoad = false
     let row = document.createElement('div'); row.className = `msg-row ${sender}`; row.setAttribute('data-msg-id', id);
     let dBtn = document.createElement('button'); dBtn.className = 'p2p-delete-btn' + (sender !== 'me' && isLocalAdmin() ? ' admin-del' : ''); dBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
     if(sender === 'me' || isLocalAdmin()) {
-        dBtn.onclick = () => { row.querySelector('.bubble').innerHTML = '<i>🔒 Wiped via Delete for Everyone.</i>'; deleteDecentralizedMsg(id); sendAdminAction('del_msg', id); dBtn.remove(); };
+        dBtn.onclick = () => { row.querySelector('.bubble').innerHTML = '<i>🔒 Wiped via Admin / Everyone.</i>'; deleteDecentralizedMsg(id); sendAdminAction('del_msg', id); dBtn.remove(); };
         row.appendChild(dBtn);
     }
     let b = document.createElement('div'); b.className = 'bubble'; b.innerHTML += `<span class="bubble-name-tag">${nameLabel}</span>`;
@@ -500,7 +560,7 @@ function pushBubble(text, sender, id, mediaObj, nameLabel, isHistoryLoad = false
 }
 function appendSystemMessage(t) { let m = document.createElement('div'); m.className = 'system-msg'; m.innerText = t; messagesContainer.appendChild(m); messagesContainer.scrollTop = messagesContainer.scrollHeight; }
 
-// --- BLACKBOARD FIX: Mobile Touch + Shapes Add ---
+// --- BLACKBOARD FIX: Text Tool Added ---
 if(blackboardToggleBtn) blackboardToggleBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.remove('blackboard-hidden'); resizeCanvas(); });
 const closeBoardBtn = document.getElementById('close-board-btn');
 if(closeBoardBtn) closeBoardBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.add('blackboard-hidden'); });
@@ -515,13 +575,30 @@ window.addEventListener('resize', resizeCanvas);
 function getCoords(e) { let r = blackboardCanvas.getBoundingClientRect(); let cx = e.clientX || (e.touches && e.touches[0].clientX); let cy = e.clientY || (e.touches && e.touches[0].clientY); return {x: cx-r.left, y: cy-r.top}; }
 
 function startDraw(e) {
-    isDrawing = true; let c = getCoords(e); localStartX = c.x; localStartY = c.y; lastX = c.x; lastY = c.y;
+    let c = getCoords(e);
+    
+    // TEXT TOOL LOGIC
+    if (currentTool === 'text') {
+        let txt = prompt("📝 Paste your code or type text here:");
+        if (txt && txt.trim() !== "") {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.font = "bold 20px monospace"; // Code ke liye monospace best hai
+            ctx.fillStyle = currentColor;
+            ctx.fillText(txt, c.x, c.y);
+            syncDraw({tool: 'text', x1: c.x, y1: c.y, text: txt, color: currentColor});
+        }
+        isDrawing = false;
+        return;
+    }
+
+    isDrawing = true; localStartX = c.x; localStartY = c.y; lastX = c.x; lastY = c.y;
     canvasSnapshot = ctx.getImageData(0,0,blackboardCanvas.width, blackboardCanvas.height);
     syncDraw({tool:'start', x1:c.x, y1:c.y});
 }
 
 function moveDraw(e) {
-    if(!isDrawing) return; let c = getCoords(e); lastX = c.x; lastY = c.y;
+    if(!isDrawing || currentTool === 'text') return; 
+    let c = getCoords(e); lastX = c.x; lastY = c.y;
     if(currentTool==='pencil' || currentTool==='eraser') {
         ctx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
         ctx.lineWidth = currentTool === 'eraser' ? 25 : 3;
@@ -529,7 +606,7 @@ function moveDraw(e) {
         syncDraw({tool:currentTool, x1:localStartX, y1:localStartY, x2:c.x, y2:c.y, color:currentColor});
         localStartX = c.x; localStartY = c.y;
     } else if(currentTool==='line' || currentTool==='rectangle') {
-        ctx.putImageData(canvasSnapshot, 0, 0); // Purana restore karo
+        ctx.putImageData(canvasSnapshot, 0, 0); 
         ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 3; ctx.strokeStyle = currentColor;
         ctx.beginPath();
         if(currentTool==='line') { ctx.moveTo(localStartX, localStartY); ctx.lineTo(c.x, c.y); }
@@ -547,11 +624,9 @@ function endDraw() {
 }
 
 if(ctx) {
-    // PC Events
     blackboardCanvas.addEventListener('mousedown', startDraw);
     blackboardCanvas.addEventListener('mousemove', moveDraw);
     window.addEventListener('mouseup', endDraw);
-    // Mobile Touch Events (FIX)
     blackboardCanvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); startDraw(e.touches[0] || e); }, {passive:false});
     blackboardCanvas.addEventListener('touchmove', (e)=>{ e.preventDefault(); moveDraw(e.touches[0] || e); }, {passive:false});
     window.addEventListener('touchend', endDraw);
@@ -569,6 +644,15 @@ function renderDraw(p, senderId) {
     if(!ctx) return; let cw = blackboardCanvas.width, ch = blackboardCanvas.height;
     if(p.tool === 'start') { remotePointers[senderId] = {x: p.x1*cw, y: p.y1*ch}; return; }
     
+    // TEXT RENDERER
+    if (p.tool === 'text') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.font = "bold 20px monospace";
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.text, p.x1 * cw, p.y1 * ch);
+        return;
+    }
+
     ctx.strokeStyle = p.color; ctx.fillStyle = p.color; ctx.beginPath(); 
     if(p.tool==='pencil' || p.tool==='eraser') { 
         ctx.globalCompositeOperation = p.tool === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineWidth = p.tool === 'eraser' ? 25 : 3;
