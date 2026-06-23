@@ -22,15 +22,12 @@ let dataChannels = {};
 let localAVStream = null;
 let screenStream = null; 
 let currentFacingMode = 'user';
-let currentQuality = 'SD'; // Default Set to SD (480p equivalent)
+let currentQuality = 'SD';
 let isAudioMuted = false;
 let isVideoStopped = false;
 let localDisplayName = 'Anonymous_Node';
-
 let isIncognito = false;
-let incomingFiles = {}; 
 
-// Local Decentralized Storage (True P2P)
 function getDecentralizedChat() { return JSON.parse(localStorage.getItem('P2P_Chat_' + currentRoomDisplayCode) || '[]'); }
 function saveDecentralizedMsg(msg) { 
     if(isIncognito) return;
@@ -43,7 +40,6 @@ function deleteDecentralizedMsg(id) {
     localStorage.setItem('P2P_Chat_' + currentRoomDisplayCode, JSON.stringify(chats));
 }
 
-// Admin Logic
 function getRoomAdmins() { return JSON.parse(localStorage.getItem('P2P_Admins_' + currentRoomDisplayCode) || '[]'); }
 function isLocalAdmin() { return getRoomAdmins().includes(localPeerId); }
 
@@ -55,7 +51,6 @@ const rtcConfig = {
     ]
 };
 
-// --- DOM ACQUISITIONS ---
 const appContainer = document.getElementById('app-container');
 const roomCodeInput = document.getElementById('room-code-input');
 const connectEngineBtn = document.getElementById('connect-engine-btn');
@@ -63,7 +58,6 @@ const messagesContainer = document.getElementById('messages-container');
 const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 const attachFileBtn = document.getElementById('attach-file-btn');
-const hiddenFileInput = document.getElementById('hidden-file-input');
 const typingIndicator = document.getElementById('typing-indicator');
 
 const audioCallBtn = document.getElementById('audio-call-btn');
@@ -75,8 +69,9 @@ const blackboardOverlay = document.getElementById('blackboard-overlay');
 const blackboardCanvas = document.getElementById('blackboard-canvas');
 const ctx = blackboardCanvas ? blackboardCanvas.getContext('2d') : null;
 let isDrawing = false, currentTool = 'pencil', currentColor = '#00ff41';
-let localStartX = 0, localStartY = 0;
+let localStartX = 0, localStartY = 0, lastX = 0, lastY = 0;
 let remotePointers = {}; 
+let canvasSnapshot = null; // Box/Line rendering ke liye
 
 const videoWorkspaceOverlay = document.getElementById('video-workspace-overlay');
 const localVideoStreamNode = document.getElementById('local-video-stream');
@@ -89,10 +84,10 @@ const screenShareBtn = document.getElementById('v-screen-share-btn');
 const vBoardBtn = document.getElementById('v-board-btn'); 
 const vPipBtn = document.getElementById('v-pip-btn');
 const vQualityBtn = document.getElementById('v-quality-btn'); 
+const vMuteAudioBtn = document.getElementById('v-mute-audio-btn');
 
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const incognitoToggle = document.getElementById('incognito-toggle');
-
 if(incognitoToggle) { incognitoToggle.addEventListener('change', (e) => { isIncognito = e.target.checked; }); }
 
 function rc4Cipher(key, str) {
@@ -111,7 +106,6 @@ function generateDeterministicId(text) {
     return 'r_' + Math.abs(hash).toString(16).padStart(8, '0');
 }
 
-// --- GATEKEEPER & LIVE THEMES ---
 const ageCheck = document.getElementById('age-check');
 const enterBtn = document.getElementById('enter-btn');
 if(ageCheck && enterBtn) {
@@ -137,32 +131,7 @@ const closeMenuBtn = document.getElementById('close-menu-btn');
 if(menuBtn) menuBtn.addEventListener('click', () => { document.getElementById('sidebar').classList.add('active'); });
 if(closeMenuBtn) closeMenuBtn.addEventListener('click', () => { document.getElementById('sidebar').classList.remove('active'); });
 
-// --- LIVE EFFECTS ENGINE ---
-const mCanvas = document.getElementById('matrix-canvas'); const mCtx = mCanvas ? mCanvas.getContext('2d') : null; let columns = [];
-if (mCanvas && mCtx) {
-    mCanvas.width = window.innerWidth; mCanvas.height = window.innerHeight; const font_size = 14; const cols = mCanvas.width / font_size;
-    for (let x = 0; x < cols; x++) columns[x] = 1;
-    function renderCanvasMatrix() {
-        const theme = document.documentElement.getAttribute('data-theme');
-        if (theme === 'hacker') {
-            mCtx.fillStyle = 'rgba(0, 0, 0, 0.05)'; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height); mCtx.fillStyle = '#00ff41'; mCtx.font = "bold " + font_size + "px monospace"; 
-            for (let i = 0; i < columns.length; i++) { const text = String.fromCharCode(33 + Math.floor(Math.random() * 93)); mCtx.fillText(text, i * font_size, columns[i] * font_size); if (columns[i] * font_size > mCanvas.height && Math.random() > 0.975) columns[i] = 0; columns[i]++; }
-        } else if (theme === 'romance') {
-            mCtx.fillStyle = 'rgba(20, 3, 9, 0.06)'; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height); mCtx.fillStyle = '#ff2a6d'; mCtx.font = (12 + Math.floor(Math.random() * 6)) + "px Arial";
-            for (let i = 0; i < columns.length; i++) { const hearts = ['❤', '♥', '💕', '💖']; const text = hearts[Math.floor(Math.random() * hearts.length)]; if(Math.random() > 0.4) mCtx.fillText(text, i * font_size, columns[i] * font_size); if (columns[i] * font_size > mCanvas.height && Math.random() > 0.96) columns[i] = 0; columns[i] += 0.5; }
-        } else if (theme === 'neon-cinematic') {
-            mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height);
-            if(Math.random() > 0.99) {
-                let th = document.getElementById('thunder-overlay');
-                if(th) { th.classList.remove('thunder-hidden'); th.classList.add('thunder-flash'); setTimeout(()=>{ th.classList.remove('thunder-flash'); th.classList.add('thunder-hidden'); }, 1000); }
-            }
-        } else { mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height); } 
-        window.requestAnimationFrame(renderCanvasMatrix);
-    }
-    window.requestAnimationFrame(renderCanvasMatrix);
-}
-
-// --- FIREBASE SIGNALING (P2P True Sync Setup) ---
+// --- CONNECTION FIX: 100% Isolated Stringified Signaling ---
 function initializeSecureChatMatrix(code) {
     let bannedUsers = JSON.parse(localStorage.getItem('P2P_Banned_' + code) || '[]');
     if(bannedUsers.includes(localPeerId)) return alert("❌ You are banned from this Node.");
@@ -177,7 +146,6 @@ function initializeSecureChatMatrix(code) {
     document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color:#00ff41;"></i> Pipeline Active`;
     
     messagesContainer.innerHTML = '';
-    
     let history = getDecentralizedChat();
     history.forEach(m => {
         let clearText = m.cipher ? rc4Cipher(cryptoKey, decodeURIComponent(escape(atob(m.cipher)))) : '';
@@ -200,7 +168,10 @@ function initializeSecureChatMatrix(code) {
     });
 
     onChildAdded(ref(db, `rooms/${roomId}/signals/${localPeerId}`), (snapshot) => {
-        handleIncomingSignal(snapshot.val());
+        let val = snapshot.val();
+        let sig = JSON.parse(val.payload); // FIX: Stringified parsing
+        sig.from = val.from;
+        handleIncomingSignal(sig);
         remove(snapshot.ref);
     });
 
@@ -221,7 +192,9 @@ if(connectEngineBtn) {
 }
 
 async function sendGatewaySignal(action, data = {}, targetPeer = '') {
-    if (action === 'send_signal') push(ref(db, `rooms/${roomId}/signals/${targetPeer}`), { from: localPeerId, ...data });
+    if (action === 'send_signal') {
+        push(ref(db, `rooms/${roomId}/signals/${targetPeer}`), { from: localPeerId, payload: JSON.stringify(data) }); // FIX: Stringified delivery
+    }
 }
 
 async function handleIncomingSignal(sig) {
@@ -237,10 +210,7 @@ async function handleIncomingSignal(sig) {
             await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
             if(localAVStream) localAVStream.getTracks().forEach(t => { if(!pc.getSenders().find(s => s.track === t)) pc.addTrack(t, localAVStream); });
             let ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-            
-            // FIREBASE FIX 1: Convert Answer Object
             sendGatewaySignal('send_signal', { type: 'answer', sdp: {type: ans.type, sdp: ans.sdp} }, sig.from);
-            
             if (pc.iceQueue) { for (let c of pc.iceQueue) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){} } pc.iceQueue = []; }
         } else if (sig.type === 'answer') { 
             await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
@@ -268,8 +238,8 @@ function removeRemoteVideoNode(id) {
 
 function resetCallUI() {
     isVideoStopped = false; isAudioMuted = false;
-    if(vToggleCamBtn) { vToggleCamBtn.style.background = 'rgba(255,255,255,0.1)'; vToggleCamBtn.innerHTML = '<i class="fa-solid fa-video"></i>'; }
-    if(document.getElementById('v-mute-audio-btn')) { document.getElementById('v-mute-audio-btn').style.background = 'rgba(255,255,255,0.1)'; document.getElementById('v-mute-audio-btn').innerHTML = '<i class="fa-solid fa-microphone"></i>'; }
+    if(vToggleCamBtn) { vToggleCamBtn.style.background = 'rgba(255,255,255,0.1)'; vToggleCamBtn.innerHTML = '<i class="fa-solid fa-video"></i>'; vToggleCamBtn.style.display = 'none'; }
+    if(vMuteAudioBtn) { vMuteAudioBtn.style.background = 'rgba(255,255,255,0.1)'; vMuteAudioBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>'; }
     screenStream = null;
 }
 
@@ -277,11 +247,10 @@ function getVideoConstraints() {
     let constraints = { facingMode: currentFacingMode };
     if (currentQuality === '4K') { constraints.width = { ideal: 3840 }; constraints.frameRate = { ideal: 30 }; }
     else if (currentQuality === 'HD') { constraints.width = { ideal: 1280 }; constraints.frameRate = { ideal: 30 }; }
-    else { constraints.width = { ideal: 640 }; constraints.frameRate = { ideal: 24 }; } // SD Default
+    else { constraints.width = { ideal: 640 }; constraints.frameRate = { ideal: 24 }; } 
     return { video: constraints, audio: true };
 }
 
-// --- NETWORK CORE (P2P) ---
 function buildWebRTCLink(remoteId, isOffer) {
     if(!window.RTCPeerConnection) return;
     let pc = new RTCPeerConnection(rtcConfig); peers[remoteId] = pc; pc.iceQueue = []; pc.makingOffer = false;
@@ -291,7 +260,6 @@ function buildWebRTCLink(remoteId, isOffer) {
     pc.onnegotiationneeded = async () => {
         try { 
             pc.makingOffer = true; let offer = await pc.createOffer(); if (pc.signalingState !== "stable") return; await pc.setLocalDescription(offer); 
-            // FIREBASE FIX 2: Convert Offer Object
             sendGatewaySignal('send_signal', { type: 'offer', sdp: {type: offer.type, sdp: offer.sdp} }, remoteId); 
         } catch(err) { console.error("Negotiation error:", err); } finally { pc.makingOffer = false; }
     };
@@ -323,7 +291,6 @@ function buildWebRTCLink(remoteId, isOffer) {
         if(vQualityBtn) vQualityBtn.style.display = hasVideo ? 'flex' : 'none'; 
     };
     
-    // FIREBASE FIX 3: Convert ICE Candidate Object
     pc.onicecandidate = (e) => { 
         if (e.candidate) {
             sendGatewaySignal('send_signal', { type: 'candidate', candidate: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex } }, remoteId); 
@@ -419,7 +386,22 @@ function bindChannel(id, dc) {
     };
 }
 
-// --- CALL INITIATION ---
+// --- AUDIO ONLY CALL FIX ---
+if(audioCallBtn) {
+    audioCallBtn.addEventListener('click', async () => {
+        try {
+            localAVStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            Object.values(peers).forEach(pc => { localAVStream.getTracks().forEach(t => pc.addTrack(t, localAVStream)); });
+            resetCallUI();
+            if(vToggleCamBtn) vToggleCamBtn.style.display = 'none'; 
+            if(videoWorkspaceOverlay) videoWorkspaceOverlay.classList.remove('video-hidden'); 
+            if(videoControlDock) videoControlDock.style.display = 'flex'; 
+            if(isLocalAdmin()) sendAdminAction('call_start', 'all');
+        } catch(err) { alert("Mic Access Denied."); }
+    });
+}
+
+// --- VIDEO CALL INITIATION ---
 if(videoCallBtn) {
     videoCallBtn.addEventListener('click', async () => {
         try {
@@ -435,6 +417,7 @@ if(videoCallBtn) {
         } catch(err) { alert("Hardware Denied or No Camera."); }
     });
 }
+
 const endCallBtn = document.getElementById('v-end-call-btn');
 if(endCallBtn) {
     endCallBtn.addEventListener('click', () => {
@@ -444,6 +427,26 @@ if(endCallBtn) {
         if(dynamicVideoGrid) dynamicVideoGrid.innerHTML = ''; 
         resetCallUI(); 
         Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") dc.send(JSON.stringify({type:'end_video_call_signal'})); });
+    });
+}
+
+if(vMuteAudioBtn) {
+    vMuteAudioBtn.addEventListener('click', () => {
+        if(!localAVStream) return;
+        isAudioMuted = !isAudioMuted;
+        localAVStream.getAudioTracks().forEach(t => t.enabled = !isAudioMuted);
+        vMuteAudioBtn.style.background = isAudioMuted ? '#ff3b30' : 'rgba(255,255,255,0.1)';
+        vMuteAudioBtn.innerHTML = isAudioMuted ? '<i class="fa-solid fa-microphone-slash"></i>' : '<i class="fa-solid fa-microphone"></i>';
+    });
+}
+
+if(vToggleCamBtn) {
+    vToggleCamBtn.addEventListener('click', () => {
+        if(!localAVStream) return;
+        isVideoStopped = !isVideoStopped;
+        localAVStream.getVideoTracks().forEach(t => t.enabled = !isVideoStopped);
+        vToggleCamBtn.style.background = isVideoStopped ? '#ff3b30' : 'rgba(255,255,255,0.1)';
+        vToggleCamBtn.innerHTML = isVideoStopped ? '<i class="fa-solid fa-video-slash"></i>' : '<i class="fa-solid fa-video"></i>';
     });
 }
 
@@ -497,12 +500,13 @@ function pushBubble(text, sender, id, mediaObj, nameLabel, isHistoryLoad = false
 }
 function appendSystemMessage(t) { let m = document.createElement('div'); m.className = 'system-msg'; m.innerText = t; messagesContainer.appendChild(m); messagesContainer.scrollTop = messagesContainer.scrollHeight; }
 
-// --- BLACKBOARD ---
+// --- BLACKBOARD FIX: Mobile Touch + Shapes Add ---
 if(blackboardToggleBtn) blackboardToggleBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.remove('blackboard-hidden'); resizeCanvas(); });
 const closeBoardBtn = document.getElementById('close-board-btn');
 if(closeBoardBtn) closeBoardBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.add('blackboard-hidden'); });
 const clearBoardBtn = document.getElementById('clear-board-btn');
 if(clearBoardBtn) clearBoardBtn.addEventListener('click', () => { if(ctx) ctx.clearRect(0,0,blackboardCanvas.width, blackboardCanvas.height); Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") dc.send(JSON.stringify({type:'clear'})); }); });
+
 document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => { btn.addEventListener('click', () => { document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentTool = btn.dataset.tool; }); });
 document.querySelectorAll('.color-btn').forEach(btn => { btn.addEventListener('click', () => { document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentColor = btn.dataset.color; }); });
 
@@ -510,18 +514,47 @@ function resizeCanvas() { if(ctx && blackboardCanvas && blackboardCanvas.parentE
 window.addEventListener('resize', resizeCanvas);
 function getCoords(e) { let r = blackboardCanvas.getBoundingClientRect(); let cx = e.clientX || (e.touches && e.touches[0].clientX); let cy = e.clientY || (e.touches && e.touches[0].clientY); return {x: cx-r.left, y: cy-r.top}; }
 
+function startDraw(e) {
+    isDrawing = true; let c = getCoords(e); localStartX = c.x; localStartY = c.y; lastX = c.x; lastY = c.y;
+    canvasSnapshot = ctx.getImageData(0,0,blackboardCanvas.width, blackboardCanvas.height);
+    syncDraw({tool:'start', x1:c.x, y1:c.y});
+}
+
+function moveDraw(e) {
+    if(!isDrawing) return; let c = getCoords(e); lastX = c.x; lastY = c.y;
+    if(currentTool==='pencil' || currentTool==='eraser') {
+        ctx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
+        ctx.lineWidth = currentTool === 'eraser' ? 25 : 3;
+        ctx.strokeStyle = currentColor; ctx.beginPath(); ctx.moveTo(localStartX, localStartY); ctx.lineTo(c.x, c.y); ctx.stroke();
+        syncDraw({tool:currentTool, x1:localStartX, y1:localStartY, x2:c.x, y2:c.y, color:currentColor});
+        localStartX = c.x; localStartY = c.y;
+    } else if(currentTool==='line' || currentTool==='rectangle') {
+        ctx.putImageData(canvasSnapshot, 0, 0); // Purana restore karo
+        ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 3; ctx.strokeStyle = currentColor;
+        ctx.beginPath();
+        if(currentTool==='line') { ctx.moveTo(localStartX, localStartY); ctx.lineTo(c.x, c.y); }
+        if(currentTool==='rectangle') { ctx.rect(localStartX, localStartY, c.x - localStartX, c.y - localStartY); }
+        ctx.stroke();
+    }
+}
+
+function endDraw() {
+    if(!isDrawing) return;
+    isDrawing = false; ctx.globalCompositeOperation = 'source-over';
+    if(currentTool==='line' || currentTool==='rectangle') {
+        syncDraw({tool:currentTool, x1:localStartX, y1:localStartY, x2:lastX, y2:lastY, color:currentColor});
+    }
+}
+
 if(ctx) {
-    blackboardCanvas.addEventListener('mousedown', (e) => { isDrawing=true; let c=getCoords(e); localStartX=c.x; localStartY=c.y; canvasSnapshot = ctx.getImageData(0,0,blackboardCanvas.width, blackboardCanvas.height); syncDraw({tool:'start', x1:c.x, y1:c.y}); });
-    blackboardCanvas.addEventListener('mousemove', (e) => { 
-        if(!isDrawing) return; let c=getCoords(e); 
-        if(currentTool==='pencil' || currentTool==='eraser') { 
-            ctx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineWidth = currentTool === 'eraser' ? 25 : 3;
-            ctx.strokeStyle=currentColor; ctx.beginPath(); ctx.moveTo(localStartX, localStartY); ctx.lineTo(c.x, c.y); ctx.stroke(); 
-            syncDraw({tool:currentTool, x1:localStartX, y1:localStartY, x2:c.x, y2:c.y, color:currentColor}); 
-            localStartX=c.x; localStartY=c.y; 
-        }
-    });
-    window.addEventListener('mouseup', () => { isDrawing=false; ctx.globalCompositeOperation = 'source-over'; });
+    // PC Events
+    blackboardCanvas.addEventListener('mousedown', startDraw);
+    blackboardCanvas.addEventListener('mousemove', moveDraw);
+    window.addEventListener('mouseup', endDraw);
+    // Mobile Touch Events (FIX)
+    blackboardCanvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); startDraw(e.touches[0] || e); }, {passive:false});
+    blackboardCanvas.addEventListener('touchmove', (e)=>{ e.preventDefault(); moveDraw(e.touches[0] || e); }, {passive:false});
+    window.addEventListener('touchend', endDraw);
 }
 
 let lastDrawTime = 0;
@@ -536,13 +569,18 @@ function renderDraw(p, senderId) {
     if(!ctx) return; let cw = blackboardCanvas.width, ch = blackboardCanvas.height;
     if(p.tool === 'start') { remotePointers[senderId] = {x: p.x1*cw, y: p.y1*ch}; return; }
     
-    ctx.strokeStyle=p.color; ctx.fillStyle=p.color; ctx.beginPath(); 
+    ctx.strokeStyle = p.color; ctx.fillStyle = p.color; ctx.beginPath(); 
     if(p.tool==='pencil' || p.tool==='eraser') { 
         ctx.globalCompositeOperation = p.tool === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineWidth = p.tool === 'eraser' ? 25 : 3;
         let startPoint = remotePointers[senderId] || {x: p.x1*cw, y: p.y1*ch};
         ctx.moveTo(startPoint.x, startPoint.y); ctx.lineTo(p.x2*cw, p.y2*ch); ctx.stroke(); 
         remotePointers[senderId] = {x: p.x2*cw, y: p.y2*ch}; 
-    } 
+    } else if (p.tool==='line' || p.tool==='rectangle') {
+        ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 3;
+        if(p.tool==='line') { ctx.moveTo(p.x1*cw, p.y1*ch); ctx.lineTo(p.x2*cw, p.y2*ch); }
+        if(p.tool==='rectangle') { ctx.rect(p.x1*cw, p.y1*ch, (p.x2 - p.x1)*cw, (p.y2 - p.y1)*ch); }
+        ctx.stroke();
+    }
     ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 3;
 }
 
