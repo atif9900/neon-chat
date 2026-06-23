@@ -1,49 +1,178 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="cyberpunk">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Chat | Ultimate P2P</title>
-    <link rel="stylesheet" href="style.css?v=2.0">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CryptChat Pro - Secure Node Matrix</title>
+    <meta name="description" content="Decentralized E2EE peer-to-peer anonymous communication platform.">
+    <meta name="robots" content="index, follow">
+    
+    <link rel="stylesheet" href="style.css?v=smart_dock_v16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="glass-container">
-        <div class="brand-section">
-            <h1 class="neon-text">Neon Chat</h1>
-            <p class="typing-container">⚡ <span class="typing-text">Decentralized Next-Gen Calling...</span></p>
-        </div>
-        
-        <div class="controls-section">
-            <input type="text" id="roomInput" placeholder="Enter or Generate Code" class="glass-input">
-            <button id="connectBtn" class="neon-btn">Connect</button>
-            <button id="permGroupBtn" class="neon-btn premium-btn">👑 Permanent Group</button>
-        </div>
 
-        <div class="media-controls">
-            <button id="micBtn" class="glass-btn">🎙️ Mic</button>
-            <button id="camBtn" class="glass-btn">📷 Cam</button>
-            <button id="shareBtn" class="glass-btn">🖥️ Share Screen</button>
-            <select id="qualitySelect" class="glass-input">
-                <option value="auto">Auto (Smart)</option>
-                <option value="1080">HD (1080p)</option>
-                <option value="720">High (720p)</option>
-                <option value="480">Data Saver (480p)</option>
-            </select>
-        </div>
-        
-        <div class="whiteboard-tools">
-            <button id="drawBtn" class="glass-btn active">✏️  Draw</button>
-            <button id="eraserBtn" class="glass-btn">🧽 Eraser</button>
-            <button id="clearBtn" class="glass-btn danger">🗑️ Clear</button>
+    <canvas id="matrix-canvas"></canvas>
+
+    <div id="splash-screen" class="splash-container">
+        <div class="splash-content">
+            <h1 class="logo-text"><i class="fa-solid fa-user-shield"></i> CryptChat Pro</h1>
+            <p class="tagline">Decentralized Anonymous Communication Suite</p>
+            
+            <div class="ad-box">
+                <p class="ad-label">Sponsored Advertisement Hub</p>
+                <div id="ad-slot">
+                    <script src="https://pl29733541.effectivecpmnetwork.com/66/22/6d/66226d9018ea0a45e30ce257b97494fb.js"></script>
+                </div>
+            </div>
+
+            <div class="username-card">
+                <label for="display-name-input">Assign Terminal Alias (Temporary Name)</label>
+                <input type="text" id="display-name-input" placeholder="Enter anonymous handle (e.g., Cyber_Ghost)..." autocomplete="off" maxlength="15">
+            </div>
+
+            <div class="gatekeeper-box">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="age-check">
+                    <span class="checkmark"></span>
+                    <p class="legal-notice">I declare I am 18+, accept all internal Privacy Policy metrics, and understand public channels contain advertisements.</p>
+                </label>
+            </div>
+            <button id="enter-btn" class="glow-btn" disabled>Verify Identity & Initialize Link <i class="fa-solid fa-bolt"></i></button>
+            
+            <p style="text-align: center; color: var(--text-muted); font-size: 0.75rem; margin-top: 15px; font-weight: 600; letter-spacing: 1px;">Created by <span style="color: var(--accent);">neon_invisible</span></p>
         </div>
     </div>
 
-    <div class="workspace">
-        <canvas id="whiteboard"></canvas>
-        <div id="videoGrid" class="video-grid"></div>
+    <div id="app-container" class="app-hidden">
+        <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="sidebar-header">
+                    <h2><i class="fa-solid fa-microchip"></i> Node Control</h2>
+                    <button id="close-menu-btn" class="close-menu-btn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                
+                <div class="control-panel">
+                    <div class="unified-input-card">
+                        <label>Routing Cryptokey Engine</label>
+                        <input type="text" id="room-code-input" placeholder="Enter room code key..." autocomplete="off">
+                        <button id="connect-engine-btn" class="panel-btn"><i class="fa-solid fa-satellite-dish"></i> Build Node Interface</button>
+                    </div>
+
+                    <div class="incognito-box">
+                        <label class="switch" title="Toggle Incognito Mode">
+                            <input type="checkbox" id="incognito-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                        <span class="incognito-label">🥸 Incognito (No Device Save)</span>
+                    </div>
+
+                    <div class="history-section">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> Device Chat Archives</h3>
+                        <ul id="history-list" class="history-list"></ul>
+                        <button id="clear-all-history-btn" class="panel-btn danger-btn"><i class="fa-solid fa-trash-can"></i> Wipe All Device Records</button>
+                    </div>
+
+                    <div class="invite-section hidden" id="invite-section">
+                        <p>Active Token Key:</p>
+                        <div class="copy-box">
+                            <input type="text" id="share-url" readonly>
+                            <button id="copy-btn"><i class="fa-solid fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="theme-selector">
+                    <h3>Visual Themes Matrix</h3>
+                    <div class="theme-options">
+                        <button class="theme-btn active" data-set-theme="cyberpunk"><span class="dot cp"></span></button>
+                        <button class="theme-btn" data-set-theme="hacker"><span class="dot hk"></span></button>
+                        <button class="theme-btn" data-set-theme="romance"><span class="dot rm"></span></button>
+                        <button class="theme-btn" data-set-theme="formal"><span class="dot fm"></span></button>
+                        <button class="theme-btn" data-set-theme="neon-cinematic" title="Neon Cinematic"><span class="dot" style="background: #d900ff;"></span></button>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-bottom">
+                <p id="status-text"><i class="fa-solid fa-network-wired" style="color: #ff3b30;"></i> Pipeline Offline</p>
+            </div>
+        </aside>
+
+        <main class="chat-area" id="main-chat-view">
+            <header class="chat-header">
+                <div class="header-left">
+                    <button id="menu-btn" class="menu-btn"><i class="fa-solid fa-bars"></i></button>
+                    <span id="room-title">Core Terminal Standby</span>
+                </div>
+                <div class="header-actions">
+                    <button id="audio-call-btn" class="action-circle-btn hidden" title="Voice Call"><i class="fa-solid fa-phone"></i></button>
+                    <button id="video-call-btn" class="action-circle-btn hidden" title="Video Call"><i class="fa-solid fa-video"></i></button>
+                    <button id="blackboard-toggle-btn" class="action-circle-btn hidden" title="Blackboard"><i class="fa-solid fa-chalkboard"></i></button>
+                    <button id="leave-chat-btn" class="action-circle-btn hidden" style="border-color: #ff3b30; color: #ff3b30; box-shadow: 0 0 8px rgba(255,59,48,0.4);" title="Leave Chat Terminal"><i class="fa-solid fa-right-from-bracket"></i></button>
+                    <span id="peer-count" class="badge">0 Connections</span>
+                </div>
+            </header>
+
+            <div class="messages-container" id="messages-container"></div>
+            <div id="typing-indicator" class="typing-indicator hidden"><span></span><span></span><span></span></div>
+
+            <footer class="chat-footer">
+                <div class="input-wrapper">
+                    <button id="attach-file-btn" class="attach-btn" disabled><i class="fa-solid fa-paperclip"></i></button>
+                    <input type="file" id="hidden-file-input" class="hidden">
+                    <input type="text" id="message-input" placeholder="Awaiting pairing linkage..." disabled>
+                    <button id="send-btn" class="send-btn" disabled><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </footer>
+        </main>
+
+        <div id="blackboard-overlay" class="blackboard-layer blackboard-hidden">
+            <div class="blackboard-toolbar">
+                <div class="tool-group">
+                    <button class="tool-btn active" data-tool="pencil"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="tool-btn" data-tool="line"><i class="fa-solid fa-grip-lines-vertical" style="transform: rotate(45deg);"></i></button>
+                    <button class="tool-btn" data-tool="rectangle"><i class="fa-regular fa-square"></i></button>
+                    <button class="tool-btn" data-tool="text"><i class="fa-solid fa-font"></i></button>
+                </div>
+                <div class="tool-group">
+                    <button class="color-btn active" data-color="#00ff41" style="background: #00ff41;"></button>
+                    <button class="color-btn" data-color="#ff007f" style="background: #ff007f;"></button>
+                    <button class="color-btn" data-color="#00f0ff" style="background: #00f0ff;"></button>
+                    <button class="color-btn" data-color="#ffffff" style="background: #ffffff;"></button>
+                </div>
+                <div class="tool-group">
+                    <button id="clear-board-btn" class="tool-btn danger"><i class="fa-solid fa-trash-can"></i></button>
+                    <button id="close-board-btn" class="tool-btn system" style="background: rgba(255,59,48,0.2); color: #ff3b30;"><i class="fa-solid fa-square-xmark"></i></button>
+                </div>
+            </div>
+            <canvas id="blackboard-canvas"></canvas>
+        </div>
+
+        <div id="video-workspace-overlay" class="video-workspace-layer video-hidden">
+            <div class="video-grid-container" id="dynamic-video-grid"></div>
+            
+            <div class="local-video-frame" id="local-video-frame">
+                <video id="local-video-stream" autoplay playsinline muted></video>
+                <span class="video-self-label">You</span>
+            </div>
+
+            <div class="video-control-dock" id="video-control-dock">
+                <button id="v-mute-audio-btn" class="v-dock-btn" title="Mute Mic"><i class="fa-solid fa-microphone"></i></button>
+                <button id="v-toggle-cam-btn" class="v-dock-btn" title="Stop Camera" style="display: none;"><i class="fa-solid fa-video"></i></button>
+                <button id="v-flip-cam-btn" class="v-dock-btn system" title="Flip Camera" style="display: none;"><i class="fa-solid fa-camera-rotate"></i></button>
+                <button id="v-screen-share-btn" class="v-dock-btn system" title="Share Screen" style="display: none;"><i class="fa-solid fa-desktop"></i></button>
+                
+                <button id="v-board-btn" class="v-dock-btn system" title="Open Blackboard" style="display: flex; color: #00f0ff;"><i class="fa-solid fa-chalkboard"></i></button>
+                
+                <button id="v-quality-btn" class="v-dock-btn system" title="Toggle Video Quality" style="display: none; font-size: 0.9rem; font-weight: 800;">HD</button>
+
+                <button id="v-end-call-btn" class="v-dock-btn danger" title="End Call"><i class="fa-solid fa-phone-slash"></i></button>
+            </div>
+        </div>
     </div>
 
-    <script type="module" src="app.js?v=2.0"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
