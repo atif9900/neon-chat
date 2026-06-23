@@ -76,7 +76,7 @@ const blackboardCanvas = document.getElementById('blackboard-canvas');
 const ctx = blackboardCanvas ? blackboardCanvas.getContext('2d') : null;
 let isDrawing = false, currentTool = 'pencil', currentColor = '#00ff41';
 let localStartX = 0, localStartY = 0;
-let remotePointers = {}; // Multi-user blackboard fix
+let remotePointers = {}; 
 
 const videoWorkspaceOverlay = document.getElementById('video-workspace-overlay');
 const localVideoStreamNode = document.getElementById('local-video-stream');
@@ -87,6 +87,7 @@ const vToggleCamBtn = document.getElementById('v-toggle-cam-btn');
 const vFlipCamBtn = document.getElementById('v-flip-cam-btn');
 const screenShareBtn = document.getElementById('v-screen-share-btn');
 const vBoardBtn = document.getElementById('v-board-btn'); 
+const vPipBtn = document.getElementById('v-pip-btn');
 const vQualityBtn = document.getElementById('v-quality-btn'); 
 
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -151,12 +152,11 @@ if (mCanvas && mCtx) {
             for (let i = 0; i < columns.length; i++) { const hearts = ['❤', '♥', '💕', '💖']; const text = hearts[Math.floor(Math.random() * hearts.length)]; if(Math.random() > 0.4) mCtx.fillText(text, i * font_size, columns[i] * font_size); if (columns[i] * font_size > mCanvas.height && Math.random() > 0.96) columns[i] = 0; columns[i] += 0.5; }
         } else if (theme === 'neon-cinematic') {
             mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height);
-            // Live Thunder Effect Engine
             if(Math.random() > 0.99) {
                 let th = document.getElementById('thunder-overlay');
                 if(th) { th.classList.remove('thunder-hidden'); th.classList.add('thunder-flash'); setTimeout(()=>{ th.classList.remove('thunder-flash'); th.classList.add('thunder-hidden'); }, 1000); }
             }
-        } else { mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height); } // Formal theme
+        } else { mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height); } 
         window.requestAnimationFrame(renderCanvasMatrix);
     }
     window.requestAnimationFrame(renderCanvasMatrix);
@@ -164,7 +164,6 @@ if (mCanvas && mCtx) {
 
 // --- FIREBASE SIGNALING (P2P True Sync Setup) ---
 function initializeSecureChatMatrix(code) {
-    // Check if banned
     let bannedUsers = JSON.parse(localStorage.getItem('P2P_Banned_' + code) || '[]');
     if(bannedUsers.includes(localPeerId)) return alert("❌ You are banned from this Node.");
 
@@ -179,14 +178,12 @@ function initializeSecureChatMatrix(code) {
     
     messagesContainer.innerHTML = '';
     
-    // Load local history immediately
     let history = getDecentralizedChat();
     history.forEach(m => {
         let clearText = m.cipher ? rc4Cipher(cryptoKey, decodeURIComponent(escape(atob(m.cipher)))) : '';
         pushBubble(clearText, m.senderId === localPeerId ? 'me' : 'them', m.msgId, m.mediaObj, m.senderName, true);
     });
 
-    // Handle Admin creation if first
     const peerRef = ref(db, `rooms/${roomId}/peers/${localPeerId}`);
     set(peerRef, Date.now());
     onDisconnect(peerRef).remove();
@@ -207,7 +204,6 @@ function initializeSecureChatMatrix(code) {
         remove(snapshot.ref);
     });
 
-    // Auto-promote to admin if I am the only one creating this (locally)
     let admins = getRoomAdmins();
     if(admins.length === 0) { admins.push(localPeerId); localStorage.setItem('P2P_Admins_' + currentRoomDisplayCode, JSON.stringify(admins)); }
     updateAdminUI();
@@ -241,7 +237,10 @@ async function handleIncomingSignal(sig) {
             await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
             if(localAVStream) localAVStream.getTracks().forEach(t => { if(!pc.getSenders().find(s => s.track === t)) pc.addTrack(t, localAVStream); });
             let ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-            sendGatewaySignal('send_signal', { type: 'answer', sdp: ans }, sig.from);
+            
+            // FIREBASE FIX 1: Convert Answer Object
+            sendGatewaySignal('send_signal', { type: 'answer', sdp: {type: ans.type, sdp: ans.sdp} }, sig.from);
+            
             if (pc.iceQueue) { for (let c of pc.iceQueue) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){} } pc.iceQueue = []; }
         } else if (sig.type === 'answer') { 
             await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
@@ -250,7 +249,7 @@ async function handleIncomingSignal(sig) {
             if (pc.remoteDescription && pc.remoteDescription.type) { try { await pc.addIceCandidate(new RTCIceCandidate(sig.candidate)); } catch(e){} 
             } else { if (!pc.iceQueue) pc.iceQueue = []; pc.iceQueue.push(sig.candidate); }
         }
-    } catch(error) {}
+    } catch(error) { console.error("Signal Handling Error:", error); }
 }
 
 function updateVideoGrid() {
@@ -264,6 +263,7 @@ function removeRemoteVideoNode(id) {
     let wrapper = document.getElementById(`wrapper_${id}`);
     if(wrapper) wrapper.remove(); updateVideoGrid();
     if(dynamicVideoGrid && dynamicVideoGrid.children.length === 0 && !localAVStream) videoWorkspaceOverlay.classList.add('video-hidden');
+    updatePipButtonVisibility();
 }
 
 function resetCallUI() {
@@ -289,7 +289,11 @@ function buildWebRTCLink(remoteId, isOffer) {
     if (localAVStream) localAVStream.getTracks().forEach(t => pc.addTrack(t, localAVStream));
 
     pc.onnegotiationneeded = async () => {
-        try { pc.makingOffer = true; let offer = await pc.createOffer(); if (pc.signalingState !== "stable") return; await pc.setLocalDescription(offer); sendGatewaySignal('send_signal', { type: 'offer', sdp: offer }, remoteId); } catch(err) { } finally { pc.makingOffer = false; }
+        try { 
+            pc.makingOffer = true; let offer = await pc.createOffer(); if (pc.signalingState !== "stable") return; await pc.setLocalDescription(offer); 
+            // FIREBASE FIX 2: Convert Offer Object
+            sendGatewaySignal('send_signal', { type: 'offer', sdp: {type: offer.type, sdp: offer.sdp} }, remoteId); 
+        } catch(err) { console.error("Negotiation error:", err); } finally { pc.makingOffer = false; }
     };
 
     pc.oniceconnectionstatechange = () => { if(['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)) { removeRemoteVideoNode(remoteId); delete peers[remoteId]; delete dataChannels[remoteId]; delete remotePointers[remoteId]; } };
@@ -300,7 +304,6 @@ function buildWebRTCLink(remoteId, isOffer) {
             let wrapper = document.createElement('div'); wrapper.className = 'dynamic-remote-frame'; wrapper.id = `wrapper_${remoteId}`;
             let vid = document.createElement('video'); vid.id = `vid_${remoteId}`; vid.autoplay = true; vid.playsInline = true;
             let label = document.createElement('span'); label.className = 'video-peer-label'; label.id = `label_${remoteId}`; label.innerText = 'Connecting...';
-            // Admin control modal trigger
             label.onclick = (ev) => { if(isLocalAdmin()) showAdminModal(remoteId, ev.clientX, ev.clientY, dataChannels[remoteId]?.remoteName || 'User'); };
             
             wrapper.appendChild(vid); wrapper.appendChild(label); 
@@ -311,7 +314,7 @@ function buildWebRTCLink(remoteId, isOffer) {
 
         if(videoWorkspaceOverlay) videoWorkspaceOverlay.classList.remove('video-hidden');
         if(videoControlDock) videoControlDock.style.display = 'flex';
-        updateVideoGrid(); 
+        updateVideoGrid(); updatePipButtonVisibility();
         
         let hasVideo = e.streams[0].getVideoTracks().length > 0;
         if(vToggleCamBtn) vToggleCamBtn.style.display = hasVideo ? 'flex' : 'none'; 
@@ -320,7 +323,13 @@ function buildWebRTCLink(remoteId, isOffer) {
         if(vQualityBtn) vQualityBtn.style.display = hasVideo ? 'flex' : 'none'; 
     };
     
-    pc.onicecandidate = (e) => { if (e.candidate) sendGatewaySignal('send_signal', { type: 'candidate', candidate: e.candidate }, remoteId); };
+    // FIREBASE FIX 3: Convert ICE Candidate Object
+    pc.onicecandidate = (e) => { 
+        if (e.candidate) {
+            sendGatewaySignal('send_signal', { type: 'candidate', candidate: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex } }, remoteId); 
+        }
+    };
+    
     if (isOffer) { let dc = pc.createDataChannel("chat"); bindChannel(remoteId, dc);
     } else { pc.ondatachannel = (e) => bindChannel(remoteId, e.channel); }
 }
@@ -351,7 +360,6 @@ function bindChannel(id, dc) {
         [blackboardToggleBtn, leaveChatBtn].forEach(b => { if(b) b.classList.remove('hidden'); }); 
         if(document.getElementById('peer-count')) document.getElementById('peer-count').innerText = `${Object.keys(dataChannels).length} Active Nodes`;
         
-        // P2P Silent Sync (Send data to new user if I have it)
         if(isLocalAdmin() || getDecentralizedChat().length > 0) {
             setTimeout(() => {
                 let chunks = getDecentralizedChat();
@@ -392,7 +400,7 @@ function bindChannel(id, dc) {
             if(data.action === 'call_start') {
                 if(!localAVStream) {
                     let confirmCall = confirm("Admin started a call broadcast. Join?");
-                    if(confirmCall && videoCallBtn) videoCallBtn.click(); // Auto-join
+                    if(confirmCall && videoCallBtn) videoCallBtn.click();
                 }
             }
         }
@@ -411,7 +419,7 @@ function bindChannel(id, dc) {
     };
 }
 
-// --- CALL INITIATION (Admin protected logic applied UI side) ---
+// --- CALL INITIATION ---
 if(videoCallBtn) {
     videoCallBtn.addEventListener('click', async () => {
         try {
@@ -489,7 +497,7 @@ function pushBubble(text, sender, id, mediaObj, nameLabel, isHistoryLoad = false
 }
 function appendSystemMessage(t) { let m = document.createElement('div'); m.className = 'system-msg'; m.innerText = t; messagesContainer.appendChild(m); messagesContainer.scrollTop = messagesContainer.scrollHeight; }
 
-// --- BLACKBOARD (Glitch Fix + Eraser applied) ---
+// --- BLACKBOARD ---
 if(blackboardToggleBtn) blackboardToggleBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.remove('blackboard-hidden'); resizeCanvas(); });
 const closeBoardBtn = document.getElementById('close-board-btn');
 if(closeBoardBtn) closeBoardBtn.addEventListener('click', () => { if(blackboardOverlay) blackboardOverlay.classList.add('blackboard-hidden'); });
@@ -518,7 +526,7 @@ if(ctx) {
 
 let lastDrawTime = 0;
 function syncDraw(p) { 
-    if (p.tool === 'pencil' || p.tool === 'eraser') { if (Date.now() - lastDrawTime < 15) return; lastDrawTime = Date.now(); } // Throttling fix
+    if (p.tool === 'pencil' || p.tool === 'eraser') { if (Date.now() - lastDrawTime < 15) return; lastDrawTime = Date.now(); } 
     let cw = blackboardCanvas.width, ch = blackboardCanvas.height; let pOut = { ...p, x1: p.x1/cw, y1: p.y1/ch };
     if(p.x2 !== undefined) { pOut.x2 = p.x2/cw; pOut.y2 = p.y2/ch; }
     Object.values(dataChannels).forEach(dc => { if(dc.readyState === "open") { try { dc.send(JSON.stringify({type:'draw', payload:pOut})); } catch(e) {} } }); 
@@ -531,9 +539,9 @@ function renderDraw(p, senderId) {
     ctx.strokeStyle=p.color; ctx.fillStyle=p.color; ctx.beginPath(); 
     if(p.tool==='pencil' || p.tool==='eraser') { 
         ctx.globalCompositeOperation = p.tool === 'eraser' ? 'destination-out' : 'source-over'; ctx.lineWidth = p.tool === 'eraser' ? 25 : 3;
-        let startPoint = remotePointers[senderId] || {x: p.x1*cw, y: p.y1*ch}; // Fallback agar start miss ho jaye
+        let startPoint = remotePointers[senderId] || {x: p.x1*cw, y: p.y1*ch};
         ctx.moveTo(startPoint.x, startPoint.y); ctx.lineTo(p.x2*cw, p.y2*ch); ctx.stroke(); 
-        remotePointers[senderId] = {x: p.x2*cw, y: p.y2*ch}; // Update remote pointer specifically
+        remotePointers[senderId] = {x: p.x2*cw, y: p.y2*ch}; 
     } 
     ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 3;
 }
@@ -567,68 +575,25 @@ if(savePermanentBtn) {
 }
 renderPremiumGroups();
 
-// ... (Upar ka tumhara purana code) ...
-
-if(savePermanentBtn) {
-    savePermanentBtn.addEventListener('click', () => {
-        if(!currentRoomDisplayCode) return alert("Koi connection join karo bhai, fir save karna!");
-        let pGroups = JSON.parse(localStorage.getItem('CryptChat_VIP_Groups') || '[]');
-        if(!pGroups.includes(currentRoomDisplayCode)) { pGroups.push(currentRoomDisplayCode); localStorage.setItem('CryptChat_VIP_Groups', JSON.stringify(pGroups)); renderPremiumGroups(); alert(`👑 Room "${currentRoomDisplayCode}" VIP saved!`); } else { alert("Pehle se hi VIP list mein hai."); }
-    });
-}
-renderPremiumGroups(); // <--- YEH TUMHARI FILE KI LAST LINE HAI
-
-
-// 👇 YAHAN SE NAYA PiP WALA CODE PASTE KARNA HAI 👇
-
 // --- PICTURE-IN-PICTURE (FLOATING POPUP) LOGIC ---
-const vPipBtn = document.getElementById('v-pip-btn');
-
-// Show PiP button only when a video is active
 function updatePipButtonVisibility() {
     let remoteVideo = document.querySelector('.dynamic-remote-frame video');
-    if (vPipBtn) {
-        vPipBtn.style.display = remoteVideo ? 'flex' : 'none';
-    }
+    if (vPipBtn) vPipBtn.style.display = remoteVideo ? 'flex' : 'none';
 }
-
-// Check every time video grid updates
 const observer = new MutationObserver(updatePipButtonVisibility);
-if (dynamicVideoGrid) {
-    observer.observe(dynamicVideoGrid, { childList: true, subtree: true });
-}
+if (dynamicVideoGrid) observer.observe(dynamicVideoGrid, { childList: true, subtree: true });
 
-// 1. Manual PiP Button Click
 if (vPipBtn) {
     vPipBtn.addEventListener('click', async () => {
         let remoteVideo = document.querySelector('.dynamic-remote-frame video');
         if (!remoteVideo) return alert("Koi video chal nahi rahi hai PiP ke liye.");
-        
-        try {
-            if (document.pictureInPictureElement) {
-                await document.exitPictureInPicture();
-            } else {
-                await remoteVideo.requestPictureInPicture();
-            }
-        } catch (err) {
-            console.error("PiP error:", err);
-            alert("Tumhara browser PiP mode support nahi karta.");
-        }
+        try { if (document.pictureInPictureElement) await document.exitPictureInPicture(); else await remoteVideo.requestPictureInPicture(); } 
+        catch (err) { console.error("PiP error:", err); alert("Tumhara browser PiP mode support nahi karta."); }
     });
 }
-
-// 2. Auto-PiP on Tab Switch (Smart Feature)
 document.addEventListener('visibilitychange', async () => {
     let remoteVideo = document.querySelector('.dynamic-remote-frame video');
-    
-    // Agar user doosre tab me gaya (hidden)
     if (document.hidden && remoteVideo && !document.pictureInPictureElement) {
-        try {
-            // Background me aate hi video ko popup me fenk do
-            await remoteVideo.requestPictureInPicture();
-        } catch (err) {
-            console.log("Auto-PiP blocked by browser permissions.");
-        }
+        try { await remoteVideo.requestPictureInPicture(); } catch (err) {}
     }
 });
-
